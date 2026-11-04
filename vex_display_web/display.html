@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VEX Event Display</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+/* All display layout lives in this stylesheet so the display still works if the Tailwind CDN is unreachable. */
+:root{
+  --bg:#0a0e14; --panel:#111823; --panel2:#17212f; --line:#26364a; --text:#eef3f9; --dim:#8da2ba;
+  --red:#ff4d5e; --redbg:#3a1820; --blue:#4da3ff; --bluebg:#142a45; --gold:#ffc83d; --green:#2ee66b; --amber:#ffb020;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:calc(.5vw + .5vh);height:100%;background:var(--bg);overflow:hidden}
+body{height:100%;background:var(--bg);color:var(--text);font-family:"Barlow Condensed","Roboto Condensed","DejaVu Sans Condensed","Liberation Sans Narrow",Arial,sans-serif;
+  display:flex;flex-direction:column;cursor:none;user-select:none}
+.num{font-variant-numeric:tabular-nums}
+#panes{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:.9rem;padding:.9rem}
+.pane{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--panel);border:.14rem solid var(--line);border-radius:.8rem;overflow:hidden}
+.phead{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.7rem 1.2rem;background:var(--panel2);border-bottom:.14rem solid var(--line)}
+.badge{font-weight:800;font-size:2.1rem;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge .div{color:var(--gold)}
+.api{display:flex;align-items:center;gap:.6rem;font-weight:700;font-size:1.5rem;white-space:nowrap}
+.dot{width:1.2rem;height:1.2rem;border-radius:50%;background:var(--green);box-shadow:0 0 .8rem var(--green)}
+.dot.warn{background:var(--amber);box-shadow:0 0 .8rem var(--amber)}
+.dot.off{background:var(--red);box-shadow:0 0 .8rem var(--red)}
+.pbody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,56fr) minmax(0,44fr)}   /* rankings left, matches right */
+.matches{display:flex;flex-direction:column;min-height:0;border-left:.14rem solid var(--line);padding:.7rem .8rem;gap:.6rem}
+.sec-title{font-weight:800;font-size:1.45rem;color:var(--dim);letter-spacing:.08em;padding:0 .2rem .3rem}
+.sec{display:flex;flex-direction:column;gap:.45rem;min-height:0}
+.sec.last{flex:0 0 auto}
+.sec.next{flex:1}
+.card{background:var(--bg);border:.12rem solid var(--line);border-radius:.6rem;padding:.3rem .7rem;display:flex;flex-direction:column;justify-content:center;gap:.2rem;min-height:0}
+.sec.next .card{flex:1}
+.card.upnext{border-color:var(--gold);box-shadow:inset 0 0 0 .1rem var(--gold)}
+.row1{display:flex;align-items:center;gap:.6rem;font-size:1.25rem;font-weight:700}
+.qbadge{background:var(--text);color:var(--bg);border-radius:.4rem;padding:0 .6rem;font-weight:800;font-size:1.3rem}
+.field{color:var(--dim);margin-left:auto}
+.nextflag{margin-left:auto;background:var(--gold);color:#1a1300;font-weight:800;border-radius:.4rem;padding:0 .6rem;font-size:1.3rem}
+.win{margin-left:auto;font-weight:800;border-radius:.4rem;padding:0 .6rem;font-size:1.3rem}
+.win.red{background:var(--red);color:#fff}.win.blue{background:var(--blue);color:#021428}.win.tie{background:var(--dim);color:#0a0e14}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.alli{display:flex;align-items:center;justify-content:space-between;gap:.4rem;border-radius:.45rem;padding:.15rem .5rem;font-weight:800;font-size:1.7rem;min-width:0}
+.alli.red{background:var(--redbg);color:var(--red)}.alli.blue{background:var(--bluebg);color:var(--blue)}
+.alli .teams{display:flex;gap:.6rem;min-width:0;white-space:nowrap;overflow:hidden}
+.alli .score{font-size:2.3rem;color:#fff}
+.alli.lose{opacity:.55}
+.empty{color:var(--dim);font-size:1.5rem;padding:1rem .4rem}
+.ranks{display:flex;flex-direction:column;min-height:0;padding:.7rem .8rem}
+.rhead{display:flex;justify-content:space-between;align-items:baseline;padding:0 .2rem .3rem}
+.pageind{font-weight:700;font-size:1.3rem;color:var(--dim)}
+.rwrap{flex:1;min-height:0;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{font-size:1.25rem;color:var(--dim);font-weight:800;text-align:right;padding:.3rem .4rem;border-bottom:.12rem solid var(--line);letter-spacing:.05em}
+td{font-size:1.75rem;font-weight:700;text-align:right;padding:0 .4rem;height:calc(var(--rowh,3.7)*1rem);border-bottom:.08rem solid #1b2738}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+td:nth-child(2){font-weight:800}
+td.rk{color:var(--gold);font-weight:800}
+td:nth-child(2){color:#fff}
+.tn{display:inline-block;padding:0 .5rem;margin-left:-.5rem}
+tr.qteam .tn{background:var(--gold);color:#1a1300;border-radius:.35rem}   /* only the team number, for teams headed to the queuing tables */
+td.avg{color:var(--green)}
+.sec.last{margin-bottom:.2rem}
+.queue-sec{background:var(--gold);border-radius:.7rem;padding:.35rem .5rem}
+.queue-title{color:#1a1300}
+.card.queuing{border-color:#1a1300}
+.matches.dense{gap:.35rem}
+.matches.dense .card{padding:.15rem .6rem;gap:.1rem}
+.matches.dense .qbadge{font-size:1.05rem}
+.matches.dense .row1{font-size:1rem}
+.matches.dense .card .bl{font-size:1.1rem}
+.card .bl{font-size:1.35rem;line-height:1.15;padding:.05rem .6rem}
+.card .bl.win{margin:0 -.7rem;padding:.05rem 1.3rem}   /* winner's block runs the full width of the card */
+/* alliance line: a fixed score column (room for 199), the rest split in two halves with one team centred in each */
+.card .bl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 3ch;column-gap:.4rem;align-items:center}
+.card .bl .bt{display:contents}
+.card .bl .bt>span{text-align:center;min-width:0;overflow:hidden;white-space:nowrap}
+.card .bl .bs{text-align:right}
+.card.blank .bl{opacity:.3}
+/* single (full screen): rankings use the left 3/4 as several columns, matches keep the right 1/4 */
+#panes.single .pane:not(.ph-bracket):not(.ph-rankings) .pbody{grid-template-columns:minmax(0,3fr) minmax(0,1fr)}
+#panes.single .pane{--rowh:3.5}
+#panes.single td{font-size:1.4rem;padding:0 .25rem}
+#panes.single th{font-size:1.05rem;padding:.3rem .25rem}
+.rcols{display:grid;gap:1.4rem;height:100%}
+.rview{overflow:hidden;height:100%}
+.rtrack{display:flex;height:100%}
+.rcol{flex:0 0 auto;box-sizing:border-box;padding:0 .7rem}
+.bl.red.win{background:#ff2d45;color:#fff;box-shadow:0 0 .7rem rgba(255,45,69,.75)}
+.bl.blue.win{background:#2f7bff;color:#fff;box-shadow:0 0 .7rem rgba(47,123,255,.75)}
+.bl.win .sd{color:#fff}
+#panes.single .bl{font-size:1.5rem}
+#panes.single .ctitle{font-size:1.3rem}
+#panes.single .bh{font-size:1.15rem}
+#panes.single .sd{font-size:1.2rem;flex-basis:2rem}
+.lunchq{display:none;flex:1;min-height:0;flex-direction:column;align-items:center;justify-content:space-between;padding:.8rem}
+.pane.ph-lunchq .pbody{display:none}
+.pane.ph-lunchq .lunchq{display:flex}
+.lq-count{text-align:center;line-height:1}
+.lq-lbl{font-weight:800;font-size:1.8rem;letter-spacing:.1em;color:var(--gold);margin-bottom:.5rem}
+.lq-time{font-weight:800;font-size:6.5rem;color:#fff}
+.lq-panel{width:min(100%,66rem);background:var(--gold);border-radius:1rem;padding:1rem 1.4rem;display:flex;flex-direction:column;gap:.9rem}
+.lq-head{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;color:#1a1300}
+.lq-title{font-weight:800;font-size:3.2rem;letter-spacing:.04em}
+.lq-sub{font-weight:800;font-size:2rem}
+.lq-cards{display:flex;flex-direction:column;gap:.9rem}
+.lq-cards .card{flex:none;padding:.3rem 1.2rem;gap:.3rem}
+.lq-cards .qbadge{font-size:2.2rem;padding:0 1rem;line-height:1.2}
+.lq-cards .row1{font-size:2rem}
+/* the #panes prefix is needed: "#panes.single .bl" would otherwise win and keep the numbers small */
+#panes .lq-cards .card .bl{font-size:5.4rem;line-height:1;padding:0 1rem;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.lq-cards .card .bl .bs{display:none}
+.lq-cards.n4 .qbadge{font-size:1.8rem}
+.lq-cards.n4 .row1{font-size:1.6rem}
+#panes .lq-cards.n4 .card .bl{font-size:3.8rem}   /* 4 fields: as large as still fits */
+.msgbox{display:none;flex:1;min-height:0;flex-direction:column;align-items:center;justify-content:center;gap:1.4rem;text-align:center;padding:2rem}
+.pane.ph-msg .pbody{display:none}
+.pane.ph-msg .msgbox{display:flex}
+.msg-big{font-weight:800;font-size:3.4rem;color:var(--gold);letter-spacing:.03em;line-height:1.1}
+.msg-sub{font-size:1.9rem;color:var(--dim)}
+.msg-url{font-size:2.2rem;font-weight:700;color:var(--text)}
+#panes.single .msg-big{font-size:5.5rem}
+#panes.single .msg-sub{font-size:2.4rem}
+#panes.single .msg-url{font-size:3rem}
+#panes.single .bracket{grid-template-columns:repeat(4,1fr)}   /* full screen: each round is a quarter of the screen */
+/* phases: quals (default) | rankings (rankings only) | bracket */
+.bracket{display:none;min-height:0;min-width:0;padding:.7rem .8rem;grid-template-columns:repeat(6,1fr);grid-template-rows:auto repeat(8,minmax(0,1fr));column-gap:0;row-gap:.3rem}
+.pane.ph-bracket .bracket{display:grid}
+.pane.ph-bracket .matches,.pane.ph-bracket .ranks,.pane.ph-rankings .matches{display:none}
+.pane.ph-bracket .pbody,.pane.ph-rankings .pbody{grid-template-columns:1fr}
+.pane.ph-rankings .ranks{padding:.9rem 2rem}
+.pane{--rowh:3.7}
+.pane.ph-rankings{--rowh:4.4}
+.pane.ph-rankings td{font-size:2.4rem}
+.pane.ph-rankings th{font-size:1.5rem}
+.bcell{display:flex;flex-direction:column;justify-content:center;gap:.4rem;min-height:0;min-width:0}
+.ctitle{font-weight:800;font-size:1.05rem;color:var(--dim);letter-spacing:.05em;white-space:nowrap;overflow:hidden}
+.blabel{align-self:center;text-align:center;font-weight:800;font-size:1.9rem;color:#2a3d58}
+.bwrap{display:flex;align-items:center;min-height:0;min-width:0}
+.bm{width:100%;min-width:0;background:var(--bg);border:.12rem solid var(--line);border-radius:.5rem;padding:.2rem .35rem;display:flex;flex-direction:column;gap:.12rem}
+.sd{flex:0 0 1.5rem;color:var(--dim);font-size:1rem;font-weight:700}
+.bl .bt{flex:1}
+.bm.done{border-color:#3b5372}
+.bh{font-size:.95rem;font-weight:800;color:var(--dim);white-space:nowrap}
+.bl{display:flex;align-items:center;gap:.3rem;font-weight:800;font-size:1.3rem;border-radius:.3rem;padding:0 .3rem;min-width:0}
+.bl.red{background:var(--redbg);color:var(--red)}.bl.blue{background:var(--bluebg);color:var(--blue)}
+.bl .bt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bl .bt.ph{font-weight:600;font-style:italic;opacity:.5}
+.bl.win .bs{color:#fff}
+.bm .bl.win{margin:0 -.35rem;padding:0 .65rem}   /* winner's block runs the full width of the card */
+.bl .bt{display:flex;gap:.9rem}                   /* team numbers a bit further apart */
+.bcell.fin .bm{flex:0 1 auto;max-height:none;padding:.35rem .45rem}
+#gear{position:fixed;top:.4rem;right:.5rem;width:2.4rem;height:2.4rem;color:var(--dim);opacity:.12;cursor:pointer;z-index:10;transition:opacity .2s}
+#gear:hover{opacity:1}
+#gear svg{width:100%;height:100%}
+</style>
+</head>
+<body>
+<a id="gear" href="index.html" title="Admin setup" aria-label="Admin setup"></a>
+
+<div id="panes">
+  <section class="pane" id="pane-hs"></section>
+  <section class="pane" id="pane-ms"></section>
+</div>
+<script src="vexdata.js"></script>
+<script>
+/* ---------- tiny Lucide-style inline icons ---------- */
+const ICONS = {
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>'
+};
+function icon(n){return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICONS[n]+'</svg>';}
+document.getElementById('gear').innerHTML = icon('settings');
+
+/* ---------- config (server is source of truth; localStorage is the offline mirror) ---------- */
+/* All settings are in this page's URL (made on the admin page, index.html). No URL settings -> go to the admin page. */
+let cfg = VEX.fromUrl();
+if (!cfg.configured) location.replace('index.html' + location.search + location.hash);
+document.getElementById('gear').href = 'index.html' + location.search + location.hash;
+window.addEventListener('hashchange', ()=>location.reload());
+
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S = { hs:{data:null, fails:0, timer:null}, ms:{data:null, fails:0, timer:null} };
+let page = 0, countdown = cfg.scroll, lastSeq = null, build = null, ip = location.hostname;
+
+
+/* ---------- pane skeleton ---------- */
+function buildPane(div){
+  document.getElementById('pane-'+div).innerHTML =
+    '<div class="phead"><div class="badge" id="b-'+div+'"></div><div class="api" id="a-'+div+'"></div></div>'+
+    '<div class="pbody">'+
+      '<div class="ranks"><div class="rhead"><div class="sec-title" id="rt-'+div+'" style="padding:0">TEAM RANKINGS</div><div class="pageind num" id="pi-'+div+'"></div></div>'+
+        '<div class="rwrap" id="rw-'+div+'"></div></div>'+
+      '<div class="matches">'+
+        '<div class="sec last"><div id="last-'+div+'" class="sec"></div></div>'+
+        '<div class="sec next"><div class="sec-title">ON FIELD NOW</div><div id="next-'+div+'" class="sec next" style="flex:1"></div></div>'+
+        '<div class="sec next queue-sec"><div class="sec-title queue-title">NOW QUEUING</div><div id="queue-'+div+'" class="sec next" style="flex:1"></div></div>'+
+      '</div>'+
+      '<div class="bracket" id="bk-'+div+'"></div>'+
+    '</div>'+
+    '<div class="msgbox" id="mg-'+div+'"></div>'+
+    '<div class="lunchq" id="lq-'+div+'"></div>';
+}
+
+/* ---------- renderers ---------- */
+function teamsHtml(a, cls){ return a.map(t=>'<span'+(cls?' class="'+cls+'"':'')+'>'+esc(t)+'</span>').join(''); }
+
+/* Qualification match card, laid out like the elimination cards: Q badge (white) with the field name on the right,
+   then a red bar and a blue bar. The field name is dropped once the match is scored; the winner's bar lights up. */
+function bar(cls, teams, score, win){
+  return '<div class="bl '+cls+(win?' win':'')+'"><span class="bt">'+teamsHtml(teams)+'</span><span class="bs num">'+(score==null?'':score)+'</span></div>';
+}
+function matchCard(m, mode){   /* mode: 'scored' | 'field' | 'queue' */
+  const sc = !!m.scored, rw = sc && m.rs>m.bs, bw = sc && m.bs>m.rs;
+  const cls = mode==='queue' ? ' queuing' : '';
+  return '<div class="card'+cls+'"><div class="row1"><span class="qbadge num">Q '+m.num+'</span>'+((!sc && m.field)?'<span class="field">'+esc(m.field)+'</span>':'')+'</div>'+
+    bar('red', m.red, sc?m.rs:null, rw)+bar('blue', m.blue, sc?m.bs:null, bw)+'</div>';
+}
+function blankCard(){   /* empty card closing each table: no Q number, no teams */
+  return '<div class="card blank"><div class="row1"><span class="qbadge" style="visibility:hidden">Q</span></div><div class="bl red"><span class="bt">&nbsp;</span></div><div class="bl blue"><span class="bt">&nbsp;</span></div></div>';
+}
+function matchGroups(div){
+  const d = S[div].data;
+  let n = Math.max(1, Math.min(4, +(cfg[div] && cfg[div].fields) || (div==='hs' ? 3 : 2)));   /* number of fields */
+  if (d && d.demo && d.fields) n = Math.max(1, Math.min(4, +d.fields));     /* the demo brings its own field count */
+  if (!d) return {n:n, scored:[], onField:[], queuing:[]};
+  let upcoming = d.matches.filter(m=>!m.scored);
+  /* before the lunch break, matches that come after lunch are not shown on the normal screen */
+  const la = +d.lunchAfter || 0;
+  if (la > 0 && !d.matches.some(m=>m.num===la && m.scored)) upcoming = upcoming.filter(m=>m.num<=la);
+  const scored = d.matches.filter(m=>m.scored).slice(-2).reverse();
+  if (Array.isArray(d.sent)){
+    /* the queuing volunteers drive this tournament: a match is ON FIELD once "Sent to Field" was pressed
+       (latest n, until it is scored); NOW QUEUING is the next n not yet sent. Q1 starts in NOW QUEUING. */
+    const sent = new Set(d.sent);
+    return {n:n, sent:true, scored:scored, onField:upcoming.filter(m=>sent.has(m.num)).slice(-n), queuing:upcoming.filter(m=>!sent.has(m.num)).slice(0,n)};
+  }
+  return {n:n, scored:scored, onField:upcoming.slice(0,n), queuing:upcoming.slice(n,2*n)};
+}
+
+function pageSize(div){
+  const wrap = document.getElementById('rw-'+div);
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const rowv = parseFloat(getComputedStyle(document.getElementById('pane-'+div)).getPropertyValue('--rowh')) || 3.7;
+  const rowH = rowv*rem + 1.3;                          /* td height + border */
+  const headH = 2.6*rem;
+  return Math.max(3, Math.floor((wrap.clientHeight - headH) / rowH));
+}
+
+function renderStatus(div){
+  const s = S[div], d = s.data;
+  let cls='', txt='API: ONLINE';
+  if (!d){ cls='off'; txt = s.fails>0 ? 'API: OFFLINE' : 'API: CONNECTING'; if(s.fails===0) cls='warn'; }
+  else if (s.fails>=3){ cls='off'; txt='API: OFFLINE'; }
+  else if (s.fails>0 || !d.online){ cls='warn'; txt='API: RECONNECTING'; }
+  else if (d.lunchPause){ cls='warn'; txt='API: PAUSED FOR LUNCH'; }
+  document.getElementById('a-'+div).innerHTML = '<span class="dot '+cls+'"></span><span>'+txt+'</span>';
+}
+
+function renderMatches(div){
+  const d = S[div].data;
+  const last = document.getElementById('last-'+div), nxt = document.getElementById('next-'+div), que = document.getElementById('queue-'+div);
+  if (!d){ last.innerHTML = '<div class="empty">Waiting for data…</div>'; nxt.innerHTML=''; que.innerHTML=''; return; }
+  const g = matchGroups(div);
+  last.closest('.matches').classList.toggle('dense', g.n >= 4);   /* only 4 fields get the compact size */
+  last.innerHTML = g.scored.length ? g.scored.map(m=>matchCard(m,'scored')).join('') : '<div class="empty">No matches scored yet</div>';
+  /* one slot per field in each table; a slot with no match left stays an empty card (no Q number, no teams) */
+  const fill = (arr, mk) => arr.map(mk).join('') + new Array(Math.max(0, g.n - arr.length)).fill(blankCard()).join('');
+  nxt.innerHTML = fill(g.onField, m=>matchCard(m,'field'));
+  que.innerHTML = fill(g.queuing, m=>matchCard(m,'queue'));
+}
+
+/* number of ranking columns: 1 in double mode; in single (full screen) 3 beside the matches, 4 when rankings-only */
+function rankCols(div){
+  if (isDouble()) return 1;
+  return document.getElementById('pane-'+div).classList.contains('ph-rankings') ? 4 : 3;
+}
+function renderRanks(div){
+  if (!visible(div)) return;
+  const s = S[div], d = s.data, wrap = document.getElementById('rw-'+div), pi = document.getElementById('pi-'+div);
+  if (!d || !d.rankings.length){ wrap.innerHTML='<div class="empty">'+(d? 'No rankings published yet':'Waiting for data…')+'</div>'; pi.textContent=''; wrap._sig=''; return; }
+  const qt = new Set(); matchGroups(div).queuing.forEach(m=>m.red.concat(m.blue).forEach(t=>qt.add(t)));   /* teams at the queuing tables */
+  const K = rankCols(div), size = pageSize(div);
+  const table = rs => '<table><thead><tr><th>#</th><th>TEAM</th><th>W-L-T</th><th>WP</th><th>AP</th><th>SP</th><th>AVG</th></tr></thead><tbody>'+
+    rs.map(r=>'<tr class="'+(qt.has(r.team)?'qteam ':'')+'num"><td class="rk">'+r.rank+'</td><td><span class="tn">'+esc(r.team)+'</span></td><td>'+r.w+'-'+r.l+'-'+r.t+'</td><td>'+r.wp+'</td><td>'+r.ap+'</td><td>'+r.sp+'</td><td class="avg">'+(+r.avg).toFixed(1)+'</td></tr>').join('')+
+    '</tbody></table>';
+  if (isDouble()){                                     /* half-screen: one column, flips page by page */
+    const pages = Math.max(1, Math.ceil(d.rankings.length/size)), p = page % pages;
+    pi.textContent = 'PAGE '+(p+1)+' / '+pages;
+    wrap.innerHTML = '<div class="rcols" style="grid-template-columns:minmax(0,1fr)"><div>'+table(d.rankings.slice(p*size, p*size+size))+'</div></div>';
+    wrap._sig = '';
+    return;
+  }
+  /* full screen: K columns side by side. When there are more columns than fit, the whole strip slides left one
+     column per step and the column that leaves on the left comes back in on the right (see advanceRanks). */
+  const C = Math.max(1, Math.ceil(d.rankings.length/size));
+  const cols = []; for (let c=0; c<C; c++) cols.push(table(d.rankings.slice(c*size, (c+1)*size)));
+  const loop = C > K, track = loop ? cols.concat(cols.slice(0, K)) : cols, L = track.length;   /* first K columns repeated at the end */
+  pi.textContent = '';
+  const inner = track.map(h=>'<div class="rcol" style="width:'+(100/L)+'%">'+h+'</div>').join('');
+  const sig = K+'|'+size+'|'+(loop?C:0)+'|'+inner;
+  if (wrap._sig === sig) return;                       /* nothing changed: leave the running animation alone */
+  wrap._sig = sig;
+  const pos = loop ? (s.rpos||0) % C : 0;
+  wrap.innerHTML = '<div class="rview"><div class="rtrack" data-c="'+(loop?C:0)+'" style="width:'+(L*100/K)+'%;transform:translateX(-'+(pos*100/L)+'%)">'+inner+'</div></div>';
+}
+function advanceRanks(div){
+  const s = S[div]; if (!s.data || !visible(div)) return;
+  const tr = document.getElementById('rw-'+div).querySelector('.rtrack');
+  const C = tr ? +tr.dataset.c : 0; if (!C) return;    /* everything fits: nothing to scroll */
+  const L = C + rankCols(div);
+  s.rpos = ((s.rpos||0) + 1);
+  tr.style.transition = 'transform .9s ease-in-out';
+  tr.style.transform = 'translateX(-'+(s.rpos*100/L)+'%)';
+  if (s.rpos >= C){                                     /* now showing the repeated columns: jump back to the start unseen */
+    setTimeout(function(){ tr.style.transition = 'none'; tr.style.transform = 'translateX(0)'; s.rpos = 0; }, 1000);
+  }
+}
+function renderHeader(div){
+  const d = S[div].data, ph = (d && d.phase) || 'quals';
+  const lbl = isDouble() ? '<span class="div">'+div.toUpperCase()+'</span> ' : '';
+  let txt;
+  if (ph==='quals' || ph==='nosched') txt = 'Quals';
+  else if (ph==='lunch_rank' || ph==='lunch_queue') txt = 'Lunch Break';
+  else if (ph==='bracket') txt = 'Finals';
+  else if (ph==='setup') txt = 'Setup';
+  else txt = d ? d.name : (cfg[div].sku || 'Not configured');      /* rankings only: event name */
+  document.getElementById('b-'+div).innerHTML = lbl + esc(txt);
+  renderStatus(div);
+}
+function resumeTime(d){ return d && d.lunchEnd ? new Date(d.lunchEnd*1000).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : ''; }
+/* lunch break, last minutes: the matches that go on the fields next, shown as large NOW QUEUING cards */
+function fmtCount(sec){
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), x = sec%60, p = n => String(n).padStart(2,'0');
+  return (h ? h+':' : '') + p(m) + ':' + p(x);
+}
+function updateCountdown(div){        /* time left until play resumes, on the large-card lunch screen */
+  const el = document.getElementById('cd-'+div), d = S[div].data;
+  if (!el || !d || !d.lunchEnd) return;
+  el.textContent = fmtCount(d.lunchEnd - (Date.now() + (S[div].off||0))/1000);
+}
+function renderLunchQ(div){
+  const d = S[div].data, box = document.getElementById('lq-'+div);
+  if (!d || d.phase !== 'lunch_queue'){ box.innerHTML = ''; return; }
+  const g = matchGroups(div);
+  box.innerHTML = '<div class="lq-count"><div class="lq-lbl">MATCHES RESUME IN</div><div class="lq-time num" id="cd-'+div+'"></div></div>'+
+    '<div class="lq-panel"><div class="lq-head"><div class="lq-title">NOW QUEUING</div><div class="lq-sub">MATCHES RESUME '+esc(resumeTime(d))+'</div></div>'+
+    '<div class="lq-cards'+(g.n>=4 ? ' n4' : '')+'">'+(g.sent ? g.queuing : g.onField).map(m=>matchCard(m,'queue')).join('')+'</div></div>';
+  updateCountdown(div);
+}
+function adminUrl(){ return location.origin + location.pathname.replace(/[^/]*$/, '') + 'index.html'; }
+function renderMsg(div){
+  const d = S[div].data, box = document.getElementById('mg-'+div), ph = d && d.phase;
+  if (ph==='setup') box.innerHTML = '<div class="msg-big">SETUP NEEDS TO BE COMPLETED</div><div class="msg-sub">Open the admin page, enter the event SKU and API token, and open the new display link</div><div class="msg-url">'+esc(adminUrl())+'</div>';
+  else if (ph==='nodata') box.innerHTML = '<div class="msg-big">CAN\'T LOAD EVENT DATA</div><div class="msg-sub">'+esc(d.error)+'</div><div class="msg-sub">Retrying automatically. To fix settings, open:</div><div class="msg-url">'+esc(adminUrl())+'</div>';
+  else if (ph==='nosched') box.innerHTML = '<div class="msg-big">MATCH SCHEDULE NOT FINALIZED</div>'+(d.name?'<div class="msg-sub">'+esc(d.name)+'</div>':'')+'<div class="msg-sub">Matches will appear here automatically once they are published</div>';
+  else box.innerHTML = '';
+}
+function isDouble(){ return (cfg.view || 'single') === 'double'; }
+function visible(div){ return isDouble() || div === 'hs'; }   /* single mode shows the HS tournament only */
+function applyView(){
+  const pn = document.getElementById('panes');
+  ['hs','ms'].forEach(d=>{ document.getElementById('pane-'+d).style.display = visible(d) ? '' : 'none'; });
+  pn.style.gridTemplateColumns = isDouble() ? '1fr 1fr' : '1fr';
+  pn.classList.toggle('single', !isDouble());
+}
+function renderDiv(d){ if (!visible(d)) return; applyPhase(d); renderHeader(d); renderMsg(d); renderLunchQ(d); renderMatches(d); renderBracket(d); renderRanks(d); }
+function renderAll(){ applyView(); ['hs','ms'].forEach(renderDiv); }
+
+/* ---------- phases: qualification view -> rankings only -> single-elimination bracket ---------- */
+function applyPhase(div){
+  const d = S[div].data, p = document.getElementById('pane-'+div);
+  const ph = d && d.phase ? d.phase : 'quals';
+  p.classList.toggle('ph-rankings', ph==='rankings' || ph==='lunch_rank');
+  p.classList.toggle('ph-lunchq', ph==='lunch_queue');
+  p.classList.toggle('ph-bracket', ph==='bracket');
+  p.classList.toggle('ph-msg', ph==='setup' || ph==='nosched' || ph==='nodata');
+  document.getElementById('rt-'+div).textContent = ph==='rankings' ? 'FINAL QUALIFICATION RANKINGS' : ph==='lunch_rank' ? 'LUNCH BREAK - MATCHES RESUME '+resumeTime(d) : 'TEAM RANKINGS';
+}
+
+/* 16-alliance single elimination: R16 #1-8 (slots 1-8) -> QF #1-4 (9-12) -> SF #1-2 (13-14) -> Final (15) */
+const SEED = {1:[1,16],2:[8,9],3:[4,13],4:[5,12],5:[2,15],6:[7,10],7:[3,14],8:[6,11]};
+const FEED = {9:[1,2],10:[3,4],11:[5,6],12:[7,8],13:[9,10],14:[11,12],15:[13,14]};
+const slotName = s => s<=8 ? 'R16 #'+s : s<=12 ? 'QF #'+(s-8) : s<=14 ? 'SF #'+(s-12) : 'Final';
+
+function renderBracket(div){
+  const d = S[div].data, el = document.getElementById('bk-'+div);
+  if (!d || d.phase!=='bracket'){ el.innerHTML=''; return; }
+  const by = {}; (d.elims||[]).forEach(m=>{ by[m.slot]=m; });
+  const al = {}; (d.alliances||[]).forEach(a=>{ al[a.n]=a.teams; });
+  /* seed numbers for any team list that appears in the Round of 16 */
+  const seedOf = {};
+  for (let s=1; s<=8; s++){ const m = by[s]; if (m){ if (m.red.length) seedOf[m.red.join(' ')] = SEED[s][0]; if (m.blue.length) seedOf[m.blue.join(' ')] = SEED[s][1]; } }
+  Object.keys(al).forEach(n=>{ if (al[n] && al[n].length) seedOf[al[n].join(' ')] = +n; });
+  /* red side = first feeder, blue side = second feeder (matches VEX's own bracket).
+     The moment a match is scored its winner appears in the next round's block. */
+  function side(slot, i){
+    const m = by[slot]; let seed = null, teams = null, ph = '';
+    if (slot<=8){ seed = SEED[slot][i]; ph = 'ALLIANCE '+seed; if (al[seed] && al[seed].length) teams = al[seed]; }
+    else { const f = FEED[slot][i]; ph = 'W '+slotName(f); const w = winner(f); if (w){ seed = w.seed; teams = w.teams; } }
+    const own = m ? (i ? m.blue : m.red) : null;
+    if (own && own.length) teams = own;
+    if (teams && seed===null && seedOf[teams.join(' ')] !== undefined) seed = seedOf[teams.join(' ')];
+    return {seed:seed, teams:teams, ph:ph};
+  }
+  function winner(slot){
+    const m = by[slot]; if (!m || !m.scored || m.rs===m.bs) return null;
+    return side(slot, m.rs>m.bs ? 0 : 1);
+  }
+  const line = (cls,x,score,win,lose) => '<div class="bl '+cls+(win?' win':'')+(lose?' lose':'')+'"><span class="sd num">'+(x.seed==null?'':x.seed)+'</span><span class="bt'+(x.teams?'':' ph')+'">'+(x.teams ? x.teams.map(t=>'<span>'+esc(t)+'</span>').join('') : esc(x.ph))+'</span><span class="bs num">'+(score==null?'':score)+'</span></div>';
+  function card(slot){
+    const m = by[slot], a = side(slot,0), b = side(slot,1);
+    const sc = !!(m&&m.scored), rw = sc&&m.rs>m.bs, bw = sc&&m.bs>m.rs;
+    return '<div class="bm'+(sc?' done':'')+'"><div class="bh">'+slotName(slot)+'</div>'+line('red',a,sc?m.rs:null,rw,bw)+line('blue',b,sc?m.bs:null,bw,rw)+'</div>';
+  }
+  let h = '';
+  ['ROUND OF 16','QUARTERFINALS','SEMIFINALS','FINALS'].forEach((t,i)=>{ h += '<div class="ctitle" style="grid-column:'+(isDouble() ? [1,3,4,5] : [1,2,3,4])[i]+';grid-row:1;overflow:visible">'+t+'</div>'; });
+  for (let s=1; s<=15; s++){
+    const sgl = !isDouble();
+    const col = sgl ? (s<=8?1 : s<=12?2 : s<=14?3 : 4)          /* full screen: one quarter per round */
+                    : (s<=8?1 : s<=12?3 : s<=14?4 : 5);          /* double: each round starts halfway across the previous one */
+    const z = s<=8?4 : s<=12?3 : s<=14?2 : 1;     /* later rounds tuck underneath earlier ones */
+    const span = s<=8?1 : s<=12?2 : s<=14?4 : 8;
+    const start = s<=8 ? s : s<=12 ? 2*(s-9)+1 : s<=14 ? 4*(s-13)+1 : 1;
+    h += '<div class="bwrap" style="grid-column:'+col+' / span '+(sgl?1:2)+';grid-row:'+(start+1)+' / span '+span+';z-index:'+z+((sgl ? s<15 : s<=8)?';padding-right:.9rem':'')+'">'+card(s)+'</div>';
+  }
+  el.innerHTML = h;
+}
+
+/* ---------- polling with backoff ---------- */
+async function fetchJson(url, ms){
+  const ctl = new AbortController(), t = setTimeout(()=>ctl.abort(), ms||10000);
+  try { const r = await fetch(url, {signal:ctl.signal, cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+async function poll(div){
+  const s = S[div]; clearTimeout(s.timer);
+  if (!visible(div)) return;
+  try {
+    const d = await VEX.getDivision(cfg, div);
+    s.data = d; s.fails = d.online ? 0 : Math.min(s.fails+1, 2);
+    s.off = d.serverTime ? d.serverTime*1000 - Date.now() : 0;      /* server clock minus this browser's clock */
+  } catch(e){ s.fails++; }
+  renderDiv(div);
+  const delay = s.fails ? Math.min(cfg.poll*1000*Math.pow(2, s.fails-1), 60000) : ((s.data && s.data.demo) ? 2000 : cfg.poll*1000);
+  s.timer = setTimeout(()=>poll(div), delay);
+}
+function pollAll(){ poll('hs'); poll('ms'); }
+
+/* ---------- 1s tick: page cycling ---------- */
+setInterval(function(){
+  countdown--;
+  ['hs','ms'].forEach(updateCountdown);
+  if (countdown <= 0){ page++; countdown = cfg.scroll; ['hs','ms'].forEach(d => isDouble() ? renderRanks(d) : advanceRanks(d)); }
+}, 1000);
+window.addEventListener('resize', ()=>['hs','ms'].forEach(renderRanks));
+window.addEventListener('online', pollAll);
+
+/* ---------- boot ---------- */
+(async function(){
+  buildPane('hs'); buildPane('ms'); renderAll();
+  countdown = cfg.scroll; renderAll(); pollAll();
+  /* nightly safety reload keeps long-running displays healthy */
+  setTimeout(()=>location.reload(), 6*3600*1000);
+})();
+</script>
+</body>
+</html>

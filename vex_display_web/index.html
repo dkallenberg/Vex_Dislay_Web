@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VEX Display Setup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="vexdata.js"></script>
+<style>
+  body{background:#0a0e14;color:#eef3f9;font-family:"Barlow","Segoe UI","DejaVu Sans",Arial,sans-serif}
+  .card{background:#111823;border:1px solid #26364a;border-radius:.75rem;padding:1.25rem}
+  label{display:block;font-size:.85rem;color:#8da2ba;margin-bottom:.25rem}
+  input[type=text],input[type=number],input[type=time],input[type=password],textarea,select{width:100%;background:#0a0e14;border:1px solid #26364a;border-radius:.5rem;padding:.55rem .7rem;color:#eef3f9}
+  input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid #ffc83d;outline-offset:1px}
+  .btn{display:inline-flex;align-items:center;gap:.4rem;background:#1c2a3d;border:1px solid #2f4560;border-radius:.5rem;padding:.5rem .9rem;font-weight:600;cursor:pointer;color:#eef3f9}
+  .btn:hover{background:#25374f}
+  .btn.primary{background:#ffc83d;color:#1a1300;border-color:#ffc83d}
+  .btn.primary:hover{background:#ffd76b}
+  pre{background:#070a0f;border:1px solid #1b2738;border-radius:.5rem;padding:.75rem;overflow:auto;font-size:.8rem;max-height:20rem}
+  .ok{color:#2ee66b}.bad{color:#ff4d5e}.warn{color:#ffb020}.muted{color:#8da2ba}
+  #link{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;word-break:break-all;min-height:4.5rem}
+  #qr{background:#fff;padding:10px;border-radius:.5rem;display:inline-block}
+  #qr img,#qr canvas{width:220px;height:220px}
+</style>
+</head>
+<body class="min-h-screen">
+<main class="max-w-5xl mx-auto p-4 md:p-8 space-y-6">
+  <header>
+    <h1 class="text-2xl font-bold">VEX Event Display Setup</h1>
+    <p class="text-sm muted">Enter the event details, then open or share the display link. Every setting is stored in the link, so any device that opens it shows the same display. Nothing is saved on a server.</p>
+  </header>
+
+  <section class="card space-y-3" id="out">
+    <h2 class="font-bold text-lg">Display link</h2>
+    <textarea id="link" readonly rows="3"></textarea>
+    <div class="flex flex-wrap gap-2 items-center">
+      <button class="btn primary" id="open">Open display</button>
+      <button class="btn" id="copy">Copy link</button>
+      <button class="btn" id="share" style="display:none">Share…</button>
+      <label class="flex items-center gap-2 m-0" style="color:#eef3f9"><input type="checkbox" id="withToken" checked> Include the API token in the link</label>
+    </div>
+    <p id="linkwarn" class="text-sm"></p>
+    <div class="flex flex-wrap gap-4 items-start">
+      <div id="qr"></div>
+      <p class="text-sm muted max-w-md">Scan this with a phone or tablet to open the same display. To change settings later, tap the gear in the top-right corner of a display; it opens this page with that display's settings filled in.</p>
+    </div>
+  </section>
+
+  <section class="card space-y-2">
+    <h2 class="font-bold text-lg">Tournaments shown on the display</h2>
+    <select id="view"><option value="single">1. Single tournament (FULL SCREEN)</option><option value="double">2. Double tournament: HS (left) and MS (right)</option></select>
+    <p class="text-xs muted">Single uses the High School settings below. Demo mode plays a whole event (one qualification match every 3 seconds, a lunch break, rankings, then the bracket) and starts over; it needs no SKU or token.</p>
+  </section>
+
+  <section class="grid md:grid-cols-2 gap-6">
+    <div class="card space-y-3" id="hs-card"></div>
+    <div class="card space-y-3" id="ms-card"></div>
+  </section>
+
+  <section class="card grid sm:grid-cols-3 gap-4">
+    <div><label for="poll">Refresh every (seconds, 5–300)</label><input type="number" id="poll" min="5" max="300"></div>
+    <div><label for="scroll">Ranking page cycle (seconds, 3–120)</label><input type="number" id="scroll" min="3" max="120"></div>
+    <div><label for="rankWait">Wait after last qual before rankings only (seconds)</label><input type="number" id="rankWait" min="0" max="3600"></div>
+    <p class="text-xs muted sm:col-span-3">Every device that opens the link asks events.vex.com for data itself (2 requests per tournament per refresh). If many phones use the same token, use a longer refresh (30–60 s) for public links so events.vex.com doesn't rate-limit it.</p>
+  </section>
+
+  <section class="card space-y-3">
+    <h2 class="font-bold text-lg">events.vex.com connection</h2>
+    <div><label for="token">API bearer token (create one in your events.vex.com account)</label>
+      <input type="password" id="token" autocomplete="off" placeholder="paste token">
+      <p id="token-hint" class="text-xs mt-1 muted"></p></div>
+    <div><label for="apiBase">API base URL</label><input type="text" id="apiBase"></div>
+  </section>
+
+  <section class="card space-y-3">
+    <h2 class="font-bold text-lg">Connection test</h2>
+    <div class="flex gap-2"><button class="btn" data-test="hs">Test HS</button><button class="btn" data-test="ms">Test MS</button></div>
+    <div id="preview" class="text-sm muted">Runs from this browser, exactly like a display would.</div>
+    <pre id="diag" class="hidden"></pre>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const LS = 'vexAdminLast';   /* this browser remembers the last settings (and token) for convenience */
+const PHASES = '<option value="auto">Automatic (quals, then rankings, then bracket)</option><option value="quals">Always show qualification matches</option><option value="rankings">Always show rankings only</option><option value="bracket">Always show bracket</option>';
+for (const [d, name] of [['hs','High School'],['ms','Middle School']]) $(d+'-card').innerHTML = `
+  <h2 class="font-bold text-lg">${name} event</h2>
+  ${d==='ms' ? '<p id="ms-lock" class="text-sm warn hidden">Not used: single-tournament mode shows only the High School tournament.</p>' : ''}
+  <div><label for="${d}-sku">Event SKU or events.vex.com URL</label><input type="text" id="${d}-sku" placeholder="RE-V5RC-XX-XXXX"></div>
+  <label class="flex items-center gap-2" style="color:#eef3f9"><input type="checkbox" id="${d}-demo"> Use demo data</label>
+  <div><label for="${d}-div">Division (optional: id or name, blank = first division)</label><input type="text" id="${d}-div"></div>
+  <div><label for="${d}-fields">Number of fields (1-4)</label><input type="number" id="${d}-fields" min="1" max="4"></div>
+  <div class="grid grid-cols-3 gap-2">
+    <div><label for="${d}-lunchq">Lunch after Q #</label><input type="number" id="${d}-lunchq" min="0" max="999"></div>
+    <div><label for="${d}-lunchm">Break (minutes)</label><input type="number" id="${d}-lunchm" min="0" max="600"></div>
+    <div><label for="${d}-lunchat">or resumes at</label><input type="time" id="${d}-lunchat"></div>
+  </div>
+  <p class="text-xs muted">At the break the screen shows the rankings; 5 minutes before play resumes, the next matches as large NOW QUEUING cards. From the break until play resumes, events.vex.com is not checked.</p>
+  <div><label for="${d}-phase">Display mode</label><select id="${d}-phase">${PHASES}</select></div>`;
+
+function fill(c){
+  for (const d of ['hs','ms']){ const e = c[d];
+    $(d+'-sku').value = e.sku; $(d+'-demo').checked = e.demo; $(d+'-div').value = e.division; $(d+'-fields').value = e.fields;
+    $(d+'-lunchq').value = e.lunchAfter || ''; $(d+'-lunchm').value = e.lunchMins || ''; $(d+'-lunchat').value = e.lunchResume; $(d+'-phase').value = e.phase; }
+  $('view').value = c.view; $('poll').value = c.poll; $('scroll').value = c.scroll; $('rankWait').value = c.rankWait;
+  $('apiBase').value = c.apiBase; $('token').value = c.token;
+}
+function read(){
+  const c = {view:$('view').value, poll:$('poll').value, scroll:$('scroll').value, rankWait:$('rankWait').value === '' ? 300 : $('rankWait').value,
+             apiBase:$('apiBase').value, token:$('token').value};
+  for (const d of ['hs','ms']) c[d] = {sku:$(d+'-sku').value, demo:$(d+'-demo').checked, division:$(d+'-div').value, fields:$(d+'-fields').value,
+    lunchAfter:$(d+'-lunchq').value, lunchMins:$(d+'-lunchm').value, lunchResume:$(d+'-lunchat').value, phase:$(d+'-phase').value};
+  return VEX.sanitize(c);
+}
+const displayBase = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'display.html';
+
+let qr = null;
+function update(){
+  const c = read(), single = c.view === 'single';
+  document.querySelectorAll('#ms-card input, #ms-card select').forEach(el => { el.disabled = single; });
+  $('ms-card').style.opacity = single ? '.45' : '1'; $('ms-lock').classList.toggle('hidden', !single);
+  const withTok = $('withToken').checked, url = VEX.toUrl(displayBase(), c, withTok);
+  $('link').value = url;
+  /* keep this admin page's own address in step, so it can be bookmarked or reloaded */
+  history.replaceState(null, '', VEX.toUrl(location.pathname, c, withTok));
+  try { localStorage.setItem(LS, JSON.stringify(c)); } catch(e){}
+  const shown = single ? ['hs'] : ['hs','ms'], live = shown.filter(d => !c[d].demo);
+  const msgs = [];
+  if (shown.some(d => !c[d].demo && !VEX.SKU_RE.test(c[d].sku))) msgs.push('<span class="warn">Enter an event SKU (or tick demo) for each tournament shown.</span>');
+  if (live.length && !c.token) msgs.push('<span class="warn">Live data needs an API token.</span>');
+  if (live.length && c.token && !withTok) msgs.push('<span class="warn">The token is not in the link, so other devices will show "Setup".</span>');
+  if (live.length && c.token && withTok) msgs.push('<span class="muted">Anyone who has this link can read your token. Share it only with the devices that need it.</span>');
+  $('linkwarn').innerHTML = msgs.join(' ');
+  const ti = c.token ? VEX.tokenInfo(c.token) : {};
+  $('token-hint').innerHTML = !c.token ? 'No token entered.' : ti.exp ? (ti.expired ? '<span class="bad">This token EXPIRED on '+ti.exp+'.</span>' : 'Token valid until '+ti.exp+'.') : '';
+  const q = $('qr'); q.innerHTML = '';
+  if (window.QRCode) try { qr = new QRCode(q, {text:url, width:440, height:440, correctLevel:QRCode.CorrectLevel.L}); }
+    catch(e){ q.innerHTML = '<div style="color:#333;width:220px" class="text-sm p-2">Link too long for a QR code. Untick "Include the API token" for a QR code, or copy the link instead.</div>'; }
+}
+
+async function test(div){
+  const c = read();
+  $('preview').innerHTML = '<span class="warn">Testing '+div.toUpperCase()+'…</span>';
+  try {
+    const d = await VEX.getDivision(c, div, true);
+    const top = (d.rankings||[]).slice(0,5).map(t=>'#'+t.rank+' '+esc(t.team)+' ('+t.w+'-'+t.l+'-'+t.t+')').join(', ') || 'none';
+    const nxt = (d.matches||[]).filter(m=>!m.scored).slice(0,3).map(m=>'Q'+m.num+' '+esc(m.red.join('/'))+' vs '+esc(m.blue.join('/'))).join('; ') || 'none';
+    $('preview').innerHTML =
+      '<div class="'+(d.online?'ok':'bad')+' font-semibold">'+div.toUpperCase()+': '+(d.online?'DATA STREAM OK':'NO DATA')+(d.demo?' (demo)':'')+'</div>'+
+      '<div>Event: <b>'+esc(d.name)+'</b>'+(d.division?' &middot; Division: '+esc(d.division):'')+'</div>'+
+      (d.divisions&&d.divisions.length>1 ? '<div>Divisions: '+d.divisions.map(x=>esc(x.name||x.id)+' (id '+esc(x.id)+')').join(', ')+'</div>' : '')+
+      '<div>Qualification matches: '+d.matches.length+' ('+d.matches.filter(m=>m.scored).length+' scored) &middot; Teams ranked: '+d.rankings.length+'</div>'+
+      '<div>Display phase: <b>'+esc(d.phase)+'</b> &middot; Elimination matches: '+(d.elims||[]).length+'</div>'+
+      '<div>Top 5: '+top+'</div><div>Next up: '+nxt+'</div>'+(d.error?'<div class="bad">'+esc(d.error)+'</div>':'');
+    const pre = $('diag');
+    if (d.diag && d.diag.length){ pre.classList.remove('hidden');
+      pre.textContent = d.diag.map(x=>(x.status||'ERR')+'  '+(x.ms!=null?x.ms+'ms':'--')+'  '+x.url+'\n      '+x.note).join('\n'); }
+    else pre.classList.add('hidden');
+  } catch(e){ $('preview').innerHTML = '<span class="bad">Test failed: '+esc(e.message)+'</span>'; }
+}
+
+/* start from the settings in this page's URL (e.g. from a display's gear), else the last ones used in this browser */
+let start = VEX.fromUrl();
+if (!start.configured){ try { const last = JSON.parse(localStorage.getItem(LS) || 'null'); if (last) start = VEX.sanitize(last); } catch(e){} }
+fill(start);
+document.querySelectorAll('input, select').forEach(el => el.addEventListener('input', update));
+document.querySelectorAll('input[type=checkbox], select').forEach(el => el.addEventListener('change', update));
+document.querySelectorAll('[data-test]').forEach(b => b.onclick = () => test(b.dataset.test));
+$('open').onclick = () => window.open($('link').value, '_blank');
+$('copy').onclick = async () => { try { await navigator.clipboard.writeText($('link').value); $('copy').textContent = 'Copied ✓'; }
+  catch(e){ $('link').select(); document.execCommand('copy'); $('copy').textContent = 'Copied ✓'; } setTimeout(()=>$('copy').textContent='Copy link', 1500); };
+if (navigator.share){ $('share').style.display = ''; $('share').onclick = () => navigator.share({title:'VEX Event Display', url:$('link').value}).catch(()=>{}); }
+update();
+</script>
+</body>
+</html>
