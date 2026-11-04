@@ -4,7 +4,7 @@ A static website version of the scoring display. It needs no server and no login
 
 | File | What it is |
 |---|---|
-| `index.html` | Admin page: enter the event, get a display link, copy it, share it or scan its QR code |
+| `index.html` | Admin page: enter the event, get a display link, copy it, share it or scan its QR code  |
 | `display.html` | The scoring display (rankings, matches, lunch break, bracket), same look as the Pi version |
 | `vexdata.js` | Reads events.vex.com directly from the browser; includes the demo event |
 

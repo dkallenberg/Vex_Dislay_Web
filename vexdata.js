@@ -1,4 +1,4 @@
-/* VEX Event Display - browser data layer (no server needed).
+/* VEX Event Display - browser data layer (no server needed). once
    JavaScript version of the data code in Vex_Event_Display.py: events.vex.com fetch + parsing, demo event,
    lunch break, qualification -> rankings -> bracket phases, and settings <-> URL. Used by index.html and display.html. */
 (function (global) {
